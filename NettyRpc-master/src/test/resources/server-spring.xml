@@ -7,6 +7,7 @@
        http://www.springframework.org/schema/context
        http://www.springframework.org/schema/context/spring-context.xsd">
 
+    <!--  扫描 server 包下面添加了自定义注解的类  -->
     <context:component-scan base-package="com.netty.rpc.test.server"/>
 
     <context:property-placeholder location="classpath:rpc.properties"/>

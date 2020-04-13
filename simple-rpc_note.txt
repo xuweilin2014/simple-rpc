@@ -1,0 +1,65 @@
+分布式系统：分布式系统是若干独立计算机的集合，这些计算机对于用户来说就像单个相关系统。分布式系统是建立在网络之上的软件系统。常规的垂直架构已经无法应对，分布式
+服务架构亟需一个治理系统确保架构有条不紊地进行。
+
+RPC:是指远程过程调用，是一种进程间通信方式，他是一种技术的思想，而不是规范。它允许程序调用另一个地址空间（通常是共享网络的另一台机器上）的过程或函数，
+而不用程序员显式编码这个远程调用的细节。即程序员无论是调用本地的还是远程的函数，本质上编写的调用代码基本相同。
+
+simple-rpc
+
+1.RpcServer/ServiceRegistry
+
+这个bean由于实现了ApplicationContextAware，因此在创建完毕之后会调用setApplicationContext方法，将带有RpcService注解的bean添加到RpcServer中
+的handlerMap中，handlerMap的key为bean所实现的接口的名字，而value则为bean本身，比如("HelloService", HelloServiceImpl)。接着由于此bean实现了InitializingBean
+接口，因此在调用完setApplicationContext方法后，会接着调用afterPropertiesSet方法。在这个方法中，会真正启动Rpc服务器（采用Netty作为底层框架），在服务端
+的ChannelPipeline中的ChannelHandler如下：
+
+LengthFieldBasedFrameDecoder(In) -> RpcDecoder(In) -> RpcEncoder(Out) -> RpcHandler(In)
+
+然后RpcServer开始监听127.0.0.1:18866这个地址，等待客户端的连接。并且RpcServer会通过地址 127.0.0.1:2181 连接到Zookeeper集群（或者说注册中心）上，在Zookeeper
+集群中创建/registry/data00000000X这个节点，并且把RpcServer的地址 127.0.0.1:18866 当做数据存放到这个节点上。以后客户端就可以连接到注册中心，然后从其中获取
+到RpcServer的具体地址。
+
+2.RpcClient/ServiceDiscovery
+
+ServiceDiscovery这个类是用来帮助客户端发现RpcServer，并且使客户端与这些RpcServer建立长连接的。这里以Benchmark中的代码为例：
+
+ServiceDiscovery serviceDiscovery = new ServiceDiscovery("127.0.0.1:2181");
+final RpcClient rpcClient = new RpcClient(serviceDiscovery);
+
+创建一个ServiceDiscovery对象的过程，首先通过地址127.0.0.1:2181连接到注册中心Zookeeper，然后通过watchNode方法，获取到Zookeeper中/registry节点下的所有子节点，
+接着就获取所有节点中所保存的数据（也就是所有RpcServer的ip地址和端口号）。然后RpcClient会和这些RpcServer建立长连接。并且还会对/registry节点进行监视，如果
+/registry下的子节点数量发生变化（有新加入的节点，有退出的节点），那么就会重新调用watchNode方法，获得RpcServer最新的地址，并与这些RpcServer的新地址建立
+长连接。
+
+所以综上，我们启动这个simple-rpc项目的时候，最先启动Zookeeper集群（注册中心）；再启动RpcServer，对127.0.0.1:18866进行监听，等待客户端的连接，然后连接到注册
+中心，并且其地址127.0.0.1:18866保存到注册中心的 /registry/data00000000X 这个节点上；接着启动RpcClient（需要创建ServiceDiscovery对象），与注册中心建立连接，
+并且从注册中心获得RpcServer的地址，然后RpcClient与这些RpcServer之间建立长连接。在ServiceDiscovery中让客户端与RpcServer建立连接，要用到ConnectManage实例中的
+updateConnectedServer方法。
+
+3.ObjectProxy/RpcClientHandler
+
+介绍此类，也以Benchmark为例子，比如如下代码：
+
+final HelloService syncClient = rpcClient.create(HelloService.class);
+String result = syncClient.hello(Integer.toString(i1));
+
+调用RpcClient中的create方法，该方法通过JDK 动态代理的方式，生成一个实现特定接口的对象syncClient（在这里就是HelloService接口），syncClient包含了一个实现了
+InvocationHandler接口的对象（ObjectProxy）。在接下来syncClient.hello会调用HelloService接口中的hello方法，不过这里由于动态代理的关系，会最终调用到
+ObjectProxy类中的invoke方法，在invoke方法中，会生成一个RpcRequest对象。包含了要调用的方法名称、参数类型、参数、方法所属的类等信息。
+
+接下来会用到ConnectManage类中的chooseHandler方法，来进行一个简单的负载均衡。也就是轮询调度，即以轮询的方式依次将连接请求发送到不同的RpcServer。其实这里返回
+的是一个RpcClientHandler，然后调用这个handler的sendRequest方法，把此RpcRequest发送到RpcServer，然后调用返回的RPCFuture的get方法（此方法用来获取调用的结果）
+的阻塞。
+
+当RpcServer返回方法的调用结果时，就会调用RpcClientHandler#channelRead0方法，这时会根据RpcResponse中记录的的RpcRequest的id，取出对应的RPCFuture。
+并且更新其相关的信息，其中done调用会唤醒因为RPCFuture#get方法而挂起的线程，使得这些线程获得RpcServer返回的结果（保存在RPCFuture中的result字段中）。
+
+4.ObjectProxy/IAsyncObjectProxy
+
+这里介绍simple-rpc的异步调用方法，以BenchmarkAsync中的代码为例：
+
+IAsyncObjectProxy client = rpcClient.createAsync(HelloService.class);
+RPCFuture helloFuture = client.call("hello", Integer.toString(i));
+
+通过RpcClient的createAsync方法，创建一个ObjectProxy对象，这个对象实现了IAsyncObjectProxy接口。接着调用call方法，向RpcServer发起调用，这个call方法不会像
+上面同步调用那样，通过RPCFuture#get直接阻塞在那里等待RpcServer返回调用结果，而是直接返回RPCFuture给BenchmarkAsync，也就是发起调用的客户端。

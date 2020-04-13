@@ -25,6 +25,8 @@ public class RPCFuture implements Future<Object> {
     private RpcRequest request;
     private RpcResponse response;
     private long startTime;
+
+    // 如果从调用到服务端返回响应的时间间隔大于 responseTimeThreshold，则记录到日志中
     private long responseTimeThreshold = 5000;
 
     private List<AsyncRPCCallback> pendingCallbacks = new ArrayList<AsyncRPCCallback>();
@@ -41,6 +43,7 @@ public class RPCFuture implements Future<Object> {
         return sync.isDone();
     }
 
+    // 获取Rpc调用的结果，如果结果还没从RpcServer返回，那么直接阻塞，直到结果返回
     @Override
     public Object get() throws InterruptedException, ExecutionException {
         sync.acquire(-1);
@@ -51,6 +54,8 @@ public class RPCFuture implements Future<Object> {
         }
     }
 
+    // 获取Rpc调用的结果，如果结果还没从RpcServer返回，那么直接阻塞 timeout 个时间单位，如果在 timeout 个时间单位里面
+    // 还没有返回，那么就会抛出异常。
     @Override
     public Object get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
         boolean success = sync.tryAcquireNanos(-1, unit.toNanos(timeout));
@@ -79,6 +84,7 @@ public class RPCFuture implements Future<Object> {
 
     public void done(RpcResponse reponse) {
         this.response = reponse;
+        // 唤醒正在阻塞等待RpcResponse的线程
         sync.release(1);
         invokeCallbacks();
         // Threshold
@@ -102,6 +108,8 @@ public class RPCFuture implements Future<Object> {
     public RPCFuture addCallback(AsyncRPCCallback callback) {
         lock.lock();
         try {
+            // 如果在调用 addCallback 添加回调对象的时候，RPC调用的响应已经从服务端返回，
+            // 则直接运行 callback
             if (isDone()) {
                 runCallback(callback);
             } else {
@@ -127,6 +135,7 @@ public class RPCFuture implements Future<Object> {
         });
     }
 
+    // 独占锁机制，用来判断该request是否完成
     static class Sync extends AbstractQueuedSynchronizer {
 
         private static final long serialVersionUID = 1L;
@@ -143,7 +152,10 @@ public class RPCFuture implements Future<Object> {
         @Override
         protected boolean tryRelease(int arg) {
             if (getState() == pending) {
+                // CAS设置 volatile int state = 1，CAS线程保证操作的原子性
                 if (compareAndSetState(pending, done)) {
+                    // 因为只有发送线程会执行其请求对应的RPCFuture的get方法，所以只会有一个线程挂起等待
+                    // 返回true时，AQS框架会唤醒第一个等待线程
                     return true;
                 } else {
                     return false;

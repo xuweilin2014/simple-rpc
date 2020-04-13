@@ -7,6 +7,7 @@ import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 
+import java.lang.reflect.Method;
 import java.util.Map;
 
 import net.sf.cglib.reflect.FastClass;
@@ -30,9 +31,12 @@ public class RpcHandler extends SimpleChannelInboundHandler<RpcRequest> {
 
     @Override
     public void channelRead0(final ChannelHandlerContext ctx, final RpcRequest request) throws Exception {
+        // 接收到服务端发送过来的RPCRequest之后直接提交到RPCServer中的线程池去运行，
+        // 这是因为具体的方法执行可能会耗时较多。
         RpcServer.submit(() -> {
             logger.debug("Receive request " + request.getRequestId());
             RpcResponse response = new RpcResponse();
+            // 实例化RPCResponse，并且设置requestId
             response.setRequestId(request.getRequestId());
             try {
                 Object result = handle(request);
@@ -41,6 +45,7 @@ public class RpcHandler extends SimpleChannelInboundHandler<RpcRequest> {
                 response.setError(t.toString());
                 logger.error("RPC Server handle request error", t);
             }
+            // 把响应RPCResponse发送到客户端，并且添加一个监听器
             ctx.writeAndFlush(response).addListener(new ChannelFutureListener() {
                 @Override
                 public void operationComplete(ChannelFuture channelFuture) throws Exception {
@@ -69,17 +74,9 @@ public class RpcHandler extends SimpleChannelInboundHandler<RpcRequest> {
         }
 
         // JDK reflect
-        /*Method method = serviceClass.getMethod(methodName, parameterTypes);
+        Method method = serviceClass.getMethod(methodName, parameterTypes);
         method.setAccessible(true);
-        return method.invoke(serviceBean, parameters);*/
-
-        // Cglib reflect
-        FastClass serviceFastClass = FastClass.create(serviceClass);
-//        FastMethod serviceFastMethod = serviceFastClass.getMethod(methodName, parameterTypes);
-//        return serviceFastMethod.invoke(serviceBean, parameters);
-        // for higher-performance
-        int methodIndex = serviceFastClass.getIndex(methodName, parameterTypes);
-        return serviceFastClass.invoke(methodIndex, serviceBean, parameters);
+        return method.invoke(serviceBean, parameters);
     }
 
     @Override

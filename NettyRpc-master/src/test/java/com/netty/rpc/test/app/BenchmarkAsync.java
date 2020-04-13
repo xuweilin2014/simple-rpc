@@ -33,7 +33,7 @@ public class BenchmarkAsync {
                             String result = (String) helloFuture.get(3000, TimeUnit.MILLISECONDS);
                             //System.out.println(result);
                             if (!result.equals("Hello! " + i))
-                                System.out.println("error = " + result);
+                                System.err.println("error = " + result);
                         } catch (Exception e) {
                             System.out.println(e);
                         }
@@ -50,6 +50,5 @@ public class BenchmarkAsync {
         System.out.println(msg);
 
         rpcClient.stop();
-
     }
 }

@@ -47,6 +47,7 @@ public class ServiceRegistry {
         try {
             // ZooKeeper(String connectString, int sessionTimeout, Watcher watcher)
             // connectString表明主机名以及端口号，sessionTimeout表明会话超时时间，watcher对象用于接收会话事件
+            // registryAddress为127.0.0.1:2181
             zk = new ZooKeeper(registryAddress, Constant.ZK_SESSION_TIMEOUT, new Watcher() {
                 @Override
                 public void process(WatchedEvent event) {

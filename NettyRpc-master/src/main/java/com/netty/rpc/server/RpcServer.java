@@ -47,6 +47,7 @@ import org.springframework.context.ApplicationContextAware;
  * 该接口仅有一个afterPropertiesSet方法，该方法会在bean的所有属性被设置完成（包括各种Aware的设置，如BeanFactoryAware，
  * ApplicationContextAware等）后由容器（BeanFactory）调用。此方法允许bean实例在设置了所有bean属性后执行总体配置的验证和最终初始化
  *
+ *
  */
 public class RpcServer implements ApplicationContextAware, InitializingBean {
 
@@ -120,6 +121,9 @@ public class RpcServer implements ApplicationContextAware, InitializingBean {
         return this;
     }
 
+    /**
+     * 启动 Rpc 服务器，并且连接到 Zookeeper 集群，然后把此服务器的地址注册到 Zookeeper 集群的 /registry 地址中
+     */
     public void start() throws Exception {
         if (bossGroup == null && workerGroup == null) {
             bossGroup = new NioEventLoopGroup();

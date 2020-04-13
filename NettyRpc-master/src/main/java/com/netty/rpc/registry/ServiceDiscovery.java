@@ -57,6 +57,7 @@ public class ServiceDiscovery {
     private ZooKeeper connectServer() {
         ZooKeeper zk = null;
         try {
+            // 通过地址 registryAddress（127.0.0.1:2181)连接到 Zookeeper 集群，超时时间为 5 秒
             zk = new ZooKeeper(registryAddress, Constant.ZK_SESSION_TIMEOUT, new Watcher() {
                 @Override
                 public void process(WatchedEvent event) {
@@ -93,8 +94,9 @@ public class ServiceDiscovery {
 
             // dataList为最新的注册在Zookeeper集群中的服务器地址
             this.dataList = dataList;
-
             logger.debug("Service discovery triggered updating connected server node.");
+
+            // 让客户端和现在 Zookeeper 集群中注册的最新的服务器保持长连接
             UpdateConnectedServer();
         } catch (KeeperException | InterruptedException e) {
             logger.error("", e);

@@ -31,7 +31,11 @@ public class ConnectManage {
     private static ThreadPoolExecutor threadPoolExecutor = new ThreadPoolExecutor(16, 16,
             600L, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(65536));
 
+    // 采用线程安全类型的List，ArrayList不是线程安全的，线程安全的List只有两类：synchronizedList和CopyOnWriteArrayList
     private CopyOnWriteArrayList<RpcClientHandler> connectedHandlers = new CopyOnWriteArrayList<>();
+
+    // 存储一个RpcServer的ip:port地址以及连接到这个地址的连接中的RpcClientHandler
+    // 在一个RpcClient中，有一个connectedServerNodes对象，来存储连接以及连接中的特定handler
     private Map<InetSocketAddress, RpcClientHandler> connectedServerNodes = new ConcurrentHashMap<>();
 
     private ReentrantLock lock = new ReentrantLock();
@@ -43,6 +47,7 @@ public class ConnectManage {
     private ConnectManage() {
     }
 
+    // 单例模式
     public static ConnectManage getInstance() {
         if (connectManage == null) {
             synchronized (ConnectManage.class) {
@@ -54,12 +59,17 @@ public class ConnectManage {
         return connectManage;
     }
 
+    /**
+     * @param allServerAddress 表示现在 Zookeeper 集群上所有服务器的地址(形式为ip:port)
+     */
     public void updateConnectedServer(List<String> allServerAddress) {
         if (allServerAddress != null) {
-            // Get available server node
+            // 获取依然最新的RpcServer地址
             if (allServerAddress.size() > 0) {
                 //update local serverNodes cache
                 HashSet<InetSocketAddress> newAllServerNodeSet = new HashSet<InetSocketAddress>();
+
+                // 将 String 类型的 RpcServer 地址转化为 InetSocketAddress 类型的地址，并且保存到 newAllServerNodeSet 中
                 for (int i = 0; i < allServerAddress.size(); ++i) {
                     String[] array = allServerAddress.get(i).split(":");
                     // Should check IP and port
@@ -72,6 +82,8 @@ public class ConnectManage {
                 }
 
                 // Add new server node
+                // 让客户端与新的 RpcServer 地址建立长连接，并且把连接中的 RpcClientHandler 添加到 connectedHandlers，然后把
+                // 服务器的地址与 RpcClientHandler 一起添加到 connectedServerNodes 中
                 for (final InetSocketAddress serverNodeAddress : newAllServerNodeSet) {
                     if (!connectedServerNodes.keySet().contains(serverNodeAddress)) {
                         connectServerNode(serverNodeAddress);
@@ -79,6 +91,8 @@ public class ConnectManage {
                 }
 
                 // Close and remove invalid server nodes
+                // 由于可能有些服务器更换地址或者说掉线，所以从 connectedHandlers 中移除调对应连接中的 handler
+                // 同样从 connectedServerNodes 也移除对应的 handler 和 requestId
                 for (int i = 0; i < connectedHandlers.size(); ++i) {
                     RpcClientHandler connectedServerHandler = connectedHandlers.get(i);
                     SocketAddress remotePeer = connectedServerHandler.getRemotePeer();
@@ -92,8 +106,9 @@ public class ConnectManage {
                         connectedHandlers.remove(connectedServerHandler);
                     }
                 }
-
             } else { // No available server node ( All server nodes are down )
+                // 如果从 Zookeeper 注册中心中没有发现服务器地址，那么关闭 connectedServerNodes 中所有 RpcHandler 的，
+                // 并且清空 connectedHandlers
                 logger.error("No available server node. All server nodes are down !!!");
                 for (final RpcClientHandler connectedServerHandler : connectedHandlers) {
                     SocketAddress remotePeer = connectedServerHandler.getRemotePeer();
@@ -139,6 +154,7 @@ public class ConnectManage {
         connectedHandlers.add(handler);
         InetSocketAddress remoteAddress = (InetSocketAddress) handler.getChannel().remoteAddress();
         connectedServerNodes.put(remoteAddress, handler);
+        // 唤醒所有在等待客户端与服务器端连接的线程
         signalAvailableHandler();
     }
 
@@ -162,12 +178,13 @@ public class ConnectManage {
 
     public RpcClientHandler chooseHandler() {
         int size = connectedHandlers.size();
+        // size = 0 说明现在客户端还没有和任何服务器建立连接，因此调用 waitingForHandler 方法阻塞6s进行等待，
+        // 当客户端一旦和某个服务器端建立连接之后（调用connectServerNode方法），就会通知所有的等待在 connected 上面的线程
+        // 线程被唤醒返回或者超时返回之后，重新获取客户端与服务器端的连接数量，如果大于0，则跳出自旋
         while (isRuning && size <= 0) {
             try {
-                boolean available = waitingForHandler();
-                if (available) {
-                    size = connectedHandlers.size();
-                }
+                waitingForHandler();
+                size = connectedHandlers.size();
             } catch (InterruptedException e) {
                 logger.error("Waiting for available node is interrupted! ", e);
                 throw new RuntimeException("Can't connect any servers!", e);

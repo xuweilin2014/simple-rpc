@@ -1,0 +1,26 @@
+此simple-rpc项目的大致运行流程是：首先启动Zookeeper服务器，然后启动RpcServer，此RpcServer就是用来为RpcClient提供服务的。RpcServer的具体启动流程是首先
+启动Netty，监听此服务器的ip地址和端口：127.0.0.1:18866，然后连接到Zookeeper集群，并且把此RpcServer的地址和端口号写入到Zookeeper中，
+比如/registry/data01 127.0.0.1:18866。接下来启动客户端RpcClient，首先会从Zookeeper中去获取服务器的地址列表，并且对节点/registry设置监听，然后客户端
+会和所获取的服务器列表中的每个服务器建立长连接。
+
+benchmark中的代码如下：
+
+for (int i = 0; i < threadNum; ++i) {
+    threads[i] = new Thread(() -> {
+        for (int i1 = 0; i1 < requestNum; i1++) {
+            final HelloService syncClient = rpcClient.create(HelloService.class);
+            String result = syncClient.hello(Integer.toString(i1));
+            if (!result.equals("Hello! " + i1))
+                System.out.print("error = " + result);
+            }
+    });
+    threads[i].start();
+}
+
+RpcClient类中的create方法会通过动态代理的方式，生成一个代理对象，实现HelloService接口，并且含有一个实现了InvocationHandler接口的对象，也就是ObjectProxy。
+当调用HelloService中的hello方法时，会调用ObjectProxy中的invoke方法，接着生成一个RpcRequest对象，发往RpcServer。RpcServer利用反射真正地执行方法，并且把
+结果放进RpcResponse对象中，并且发往客户端。
+
+FutureTask实现了Runnable接口与Future接口，可以用于异步获取执行结果或者取消执行任务的场景。我们可以把一个Runnable或者Callable接口代表的执行任务传入FutureTask
+中进行包装，然后直接调用FutureTask中的run方法或者传入线程池中去执行（或者将FutureTask传入到Thread中，然后调用start来执行，这与线程池本质是一样的）。
+

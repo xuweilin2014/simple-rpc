@@ -4,6 +4,8 @@ import com.netty.rpc.client.RpcClient;
 import com.netty.rpc.registry.ServiceDiscovery;
 import com.netty.rpc.test.client.HelloService;
 
+import java.io.*;
+
 /**
  * Created by luxiaoxun on 2016-03-11.
  */
@@ -11,7 +13,7 @@ public class Benchmark {
 
     public static void main(String[] args) throws InterruptedException {
 
-        ServiceDiscovery serviceDiscovery = new ServiceDiscovery("10.245.247.105:2181");
+        ServiceDiscovery serviceDiscovery = new ServiceDiscovery("127.0.0.1:2181");
         final RpcClient rpcClient = new RpcClient(serviceDiscovery);
 
         int threadNum = 10;
@@ -19,17 +21,14 @@ public class Benchmark {
         Thread[] threads = new Thread[threadNum];
 
         long startTime = System.currentTimeMillis();
-        //benchmark for sync call
+        // benchmark for sync call
         for (int i = 0; i < threadNum; ++i) {
-            threads[i] = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    for (int i = 0; i < requestNum; i++) {
-                        final HelloService syncClient = rpcClient.create(HelloService.class);
-                        String result = syncClient.hello(Integer.toString(i));
-                        if (!result.equals("Hello! " + i))
-                            System.out.print("error = " + result);
-                    }
+            threads[i] = new Thread(() -> {
+                for (int i1 = 0; i1 < requestNum; i1++) {
+                    final HelloService syncClient = rpcClient.create(HelloService.class);
+                    String result = syncClient.hello(Integer.toString(i1));
+                    if (!result.equals("Hello! " + i1))
+                        System.out.print("error = " + result);
                 }
             });
             threads[i].start();
@@ -43,4 +42,8 @@ public class Benchmark {
 
         rpcClient.stop();
     }
+
+
 }
+
+

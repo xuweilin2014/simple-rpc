@@ -1,7 +1,7 @@
 package com.netty.rpc.test.app;
 
-import com.netty.rpc.test.client.Person;
-import com.netty.rpc.test.client.PersonService;
+import com.netty.rpc.services.Person;
+import com.netty.rpc.services.PersonService;
 import com.netty.rpc.client.AsyncRPCCallback;
 import com.netty.rpc.client.RPCFuture;
 import com.netty.rpc.client.RpcClient;

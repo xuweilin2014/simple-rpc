@@ -2,9 +2,7 @@ package com.netty.rpc.test.app;
 
 import com.netty.rpc.client.RpcClient;
 import com.netty.rpc.registry.ServiceDiscovery;
-import com.netty.rpc.test.client.HelloService;
-
-import java.io.*;
+import com.netty.rpc.services.HelloService;
 
 /**
  * Created by luxiaoxun on 2016-03-11.

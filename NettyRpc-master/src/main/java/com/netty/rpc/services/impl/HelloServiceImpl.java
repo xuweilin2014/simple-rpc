@@ -1,7 +1,7 @@
-package com.netty.rpc.test.server;
+package com.netty.rpc.services.impl;
 
-import com.netty.rpc.test.client.HelloService;
-import com.netty.rpc.test.client.Person;
+import com.netty.rpc.services.HelloService;
+import com.netty.rpc.services.Person;
 import com.netty.rpc.server.RpcService;
 
 @RpcService(HelloService.class)

@@ -1,4 +1,4 @@
-package com.netty.rpc.test.client;
+package com.netty.rpc.services;
 
 public class Person {
 

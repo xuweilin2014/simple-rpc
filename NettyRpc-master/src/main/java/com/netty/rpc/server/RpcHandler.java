@@ -9,16 +9,10 @@ import io.netty.channel.SimpleChannelInboundHandler;
 
 import java.lang.reflect.Method;
 import java.util.Map;
-
-import net.sf.cglib.reflect.FastClass;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * RPC Handler（RPC request processor）
- *
- * @author luxiaoxun
- */
+
 public class RpcHandler extends SimpleChannelInboundHandler<RpcRequest> {
 
     private static final Logger logger = LoggerFactory.getLogger(RpcHandler.class);

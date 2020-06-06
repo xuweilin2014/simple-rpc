@@ -1,8 +1,9 @@
-package com.netty.rpc.test.server;
+package com.netty.rpc.bootstrap;
 
 import com.netty.rpc.registry.ServiceRegistry;
 import com.netty.rpc.server.RpcServer;
-import com.netty.rpc.test.client.HelloService;
+import com.netty.rpc.services.HelloService;
+import com.netty.rpc.services.impl.HelloServiceImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

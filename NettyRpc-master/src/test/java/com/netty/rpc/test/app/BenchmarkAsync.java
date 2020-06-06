@@ -2,7 +2,7 @@ package com.netty.rpc.test.app;
 
 import com.netty.rpc.client.RPCFuture;
 import com.netty.rpc.registry.ServiceDiscovery;
-import com.netty.rpc.test.client.HelloService;
+import com.netty.rpc.services.HelloService;
 import com.netty.rpc.client.RpcClient;
 import com.netty.rpc.client.proxy.IAsyncObjectProxy;
 

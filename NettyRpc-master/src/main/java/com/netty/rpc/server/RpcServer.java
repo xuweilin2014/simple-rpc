@@ -6,10 +6,7 @@ import com.netty.rpc.protocol.RpcResponse;
 import com.netty.rpc.protocol.RpcEncoder;
 import com.netty.rpc.registry.ServiceRegistry;
 import io.netty.bootstrap.ServerBootstrap;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelInitializer;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.EventLoopGroup;
+import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
@@ -19,6 +16,8 @@ import java.util.Map;
 import java.util.concurrent.*;
 
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GenericFutureListener;
 import org.apache.commons.collections4.MapUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,7 +71,8 @@ public class RpcServer implements ApplicationContextAware, InitializingBean {
     }
 
     /**
-     * 获取Spring容器中所有带有RpcService注解的Bean，并且以注解的value值作为key，Bean作为object放入到handlerMap中
+     * 获取Spring容器中所有带有RpcService注解的Bean
+     * 并且以注解的value值（即服务类所实现的接口）作为key，Bean作为object放入到handlerMap中为value
      */
     @Override
     public void setApplicationContext(ApplicationContext ctx) throws BeansException {
@@ -127,14 +127,15 @@ public class RpcServer implements ApplicationContextAware, InitializingBean {
     public void start() throws Exception {
         if (bossGroup == null && workerGroup == null) {
             bossGroup = new NioEventLoopGroup();
-            workerGroup = new NioEventLoopGroup();
+            workerGroup = new NioEventLoopGroup(8);
             ServerBootstrap bootstrap = new ServerBootstrap();
             bootstrap.group(bossGroup, workerGroup).channel(NioServerSocketChannel.class)
                     .childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         public void initChannel(SocketChannel channel) throws Exception {
                             channel.pipeline()
-                                    .addLast(new LengthFieldBasedFrameDecoder(65536, 0, 4, 0, 0))
+                                    .addLast(new LengthFieldBasedFrameDecoder(65536, 0, 4,
+                                            0, 0))
                                     .addLast(new RpcDecoder(RpcRequest.class))
                                     .addLast(new RpcEncoder(RpcResponse.class))
                                     .addLast(new RpcHandler(handlerMap));
@@ -148,13 +149,19 @@ public class RpcServer implements ApplicationContextAware, InitializingBean {
             int port = Integer.parseInt(array[1]);
             // Netty绑定到 127.0.0.1:18866 地址，并且进行监听，并且将此地址注册到 Zookeeper 集群中
             ChannelFuture future = bootstrap.bind(host, port).sync();
-            logger.info("Server started on port {}", port);
 
-            if (serviceRegistry != null) {
-                serviceRegistry.register(serverAddress);
-            }
-
-            future.channel().closeFuture().sync();
+            future.addListener(new ChannelFutureListener() {
+                @Override
+                public void operationComplete(ChannelFuture channelFuture) throws Exception {
+                    if (channelFuture.isSuccess()){
+                        logger.info("Server started on port {}", port);
+                        if (serviceRegistry != null) {
+                            serviceRegistry.register(serverAddress);
+                        }
+                        future.channel().closeFuture().sync();
+                    }
+                }
+            });
         }
     }
 

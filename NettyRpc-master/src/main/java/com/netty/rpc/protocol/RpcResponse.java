@@ -1,7 +1,5 @@
 package com.netty.rpc.protocol;
 
-import lombok.Data;
-
 
 public class RpcResponse {
     private String requestId;

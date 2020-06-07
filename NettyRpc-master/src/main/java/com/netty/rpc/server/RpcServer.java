@@ -16,8 +16,6 @@ import java.util.Map;
 import java.util.concurrent.*;
 
 import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
-import io.netty.util.concurrent.Future;
-import io.netty.util.concurrent.GenericFutureListener;
 import org.apache.commons.collections4.MapUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,7 +44,11 @@ import org.springframework.context.ApplicationContextAware;
  * 该接口仅有一个afterPropertiesSet方法，该方法会在bean的所有属性被设置完成（包括各种Aware的设置，如BeanFactoryAware，
  * ApplicationContextAware等）后由容器（BeanFactory）调用。此方法允许bean实例在设置了所有bean属性后执行总体配置的验证和最终初始化
  *
+ * ******************************************** 总结 ****************************************************
  *
+ * RpcServer这个bean，在Spring IoC容器启动的时候，被初始化，在初始化的过程中，它主要完成两个工作：
+ * 1.将带有RpcService注解的bean，保存到handlerMap中，Key为带有注解的bean所实现的接口，而Value为bean本身
+ * 2.让RpcServer开始监听127.0.0.1:18866这个ip地址和端口号，同时连接到Zookeeper集群，创建一个节点，并把自己的地址写入到Zookeeper节点中
  */
 public class RpcServer implements ApplicationContextAware, InitializingBean {
 
@@ -100,6 +102,7 @@ public class RpcServer implements ApplicationContextAware, InitializingBean {
         }
     }
 
+    //提交任务到RpcServer中的线程池，并且线程池是唯一的
     public static void submit(Runnable task) {
         if (threadPoolExecutor == null) {
             synchronized (RpcServer.class) {
@@ -138,7 +141,7 @@ public class RpcServer implements ApplicationContextAware, InitializingBean {
                                             0, 0))
                                     .addLast(new RpcDecoder(RpcRequest.class))
                                     .addLast(new RpcEncoder(RpcResponse.class))
-                                    .addLast(new RpcHandler(handlerMap));
+                                    .addLast(new RpcServerHandler(handlerMap));
                         }
                     })
                     .option(ChannelOption.SO_BACKLOG, 128)
@@ -155,10 +158,27 @@ public class RpcServer implements ApplicationContextAware, InitializingBean {
                 public void operationComplete(ChannelFuture channelFuture) throws Exception {
                     if (channelFuture.isSuccess()){
                         logger.info("Server started on port {}", port);
-                        if (serviceRegistry != null) {
-                            serviceRegistry.register(serverAddress);
-                        }
-                        future.channel().closeFuture().sync();
+                        submit(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (serviceRegistry != null) {
+                                    serviceRegistry.register(serverAddress);
+                                }
+                                /*
+                                 * 这里要把future.channel().closeFuture().sync()放入到线程池中去执行，是为了防止抛出BlockingOperationException，
+                                 * 即死锁异常。
+                                 * 如果用户操作调用了sync或者await方法，会在对应的future对象上阻塞用户线程，例如future.channel().closeFuture().sync()，
+                                 * 而最终触发future对象的notify动作都是通过eventLoop线程轮询任务完成的，例如对关闭的sync，因为不论是用户直接关闭或者eventLoop的轮询状态关闭，
+                                 * 都会在eventLoop的线程内完成notify动作，所以不要在IO线程内调用future对象的sync或者await方法，这样会造成死锁，
+                                 * 即该线程上的一个任务等待该线程上的其他任务唤醒自己
+                                 */
+                                try {
+                                    future.channel().closeFuture().sync();
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                        });
                     }
                 }
             });

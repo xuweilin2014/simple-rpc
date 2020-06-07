@@ -14,22 +14,23 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 import java.util.concurrent.locks.ReentrantLock;
 
-/**
- * RPCFuture for async RPC call
- * Created by luxiaoxun on 2016-03-15.
- */
 public class RPCFuture implements Future<Object> {
+
     private static final Logger logger = LoggerFactory.getLogger(RPCFuture.class);
 
     private Sync sync;
+
     private RpcRequest request;
+
     private RpcResponse response;
+
     private long startTime;
 
-    // 如果从调用到服务端返回响应的时间间隔大于 responseTimeThreshold，则记录到日志中
+    //如果从调用到服务端返回响应的时间间隔大于 responseTimeThreshold，则记录到日志中
     private long responseTimeThreshold = 5000;
 
     private List<AsyncRPCCallback> pendingCallbacks = new ArrayList<AsyncRPCCallback>();
+
     private ReentrantLock lock = new ReentrantLock();
 
     public RPCFuture(RpcRequest request) {
@@ -43,9 +44,9 @@ public class RPCFuture implements Future<Object> {
         return sync.isDone();
     }
 
-    // 获取Rpc调用的结果，如果结果还没从RpcServer返回，那么直接阻塞，直到结果返回
+    //获取Rpc调用的结果，如果结果还没从RpcServer返回，那么直接阻塞，直到结果返回
     @Override
-    public Object get() throws InterruptedException, ExecutionException {
+    public Object get() {
         sync.acquire(-1);
         if (this.response != null) {
             return this.response.getResult();
@@ -54,10 +55,10 @@ public class RPCFuture implements Future<Object> {
         }
     }
 
-    // 获取Rpc调用的结果，如果结果还没从RpcServer返回，那么直接阻塞 timeout 个时间单位，如果在 timeout 个时间单位里面
-    // 还没有返回，那么就会抛出异常。
+    //获取Rpc调用的结果，如果结果还没从RpcServer返回，那么直接阻塞 timeout 个时间单位，如果在 timeout 个时间单位里面
+    //还没有返回，那么就会抛出异常。
     @Override
-    public Object get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+    public Object get(long timeout, TimeUnit unit) throws InterruptedException {
         boolean success = sync.tryAcquireNanos(-1, unit.toNanos(timeout));
         if (success) {
             if (this.response != null) {
@@ -84,10 +85,10 @@ public class RPCFuture implements Future<Object> {
 
     public void done(RpcResponse reponse) {
         this.response = reponse;
-        // 唤醒正在阻塞等待RpcResponse的线程
+        //唤醒正在阻塞等待RpcResponse的线程
         sync.release(1);
         invokeCallbacks();
-        // Threshold
+        //Threshold
         long responseTime = System.currentTimeMillis() - startTime;
         if (responseTime > this.responseTimeThreshold) {
             logger.warn("Service response time is too slow. Request id = " + reponse.getRequestId() + ". Response Time = " + responseTime + "ms");
@@ -108,8 +109,8 @@ public class RPCFuture implements Future<Object> {
     public RPCFuture addCallback(AsyncRPCCallback callback) {
         lock.lock();
         try {
-            // 如果在调用 addCallback 添加回调对象的时候，RPC调用的响应已经从服务端返回，
-            // 则直接运行 callback
+            //如果在调用 addCallback 添加回调对象的时候，RPC调用的响应已经从服务端返回，
+            //则直接运行 callback
             if (isDone()) {
                 runCallback(callback);
             } else {
@@ -135,7 +136,7 @@ public class RPCFuture implements Future<Object> {
         });
     }
 
-    // 独占锁机制，用来判断该request是否完成
+    //独占锁机制，用来判断该request是否完成
     static class Sync extends AbstractQueuedSynchronizer {
 
         private static final long serialVersionUID = 1L;
@@ -152,10 +153,9 @@ public class RPCFuture implements Future<Object> {
         @Override
         protected boolean tryRelease(int arg) {
             if (getState() == pending) {
-                // CAS设置 volatile int state = 1，CAS线程保证操作的原子性
+                //CAS设置 volatile int state = 1，CAS线程保证操作的原子性
                 if (compareAndSetState(pending, done)) {
-                    // 因为只有发送线程会执行其请求对应的RPCFuture的get方法，所以只会有一个线程挂起等待
-                    // 返回true时，AQS框架会唤醒第一个等待线程
+                    //唤醒已经执行rpcFuture.get()的所有线程
                     return true;
                 } else {
                     return false;

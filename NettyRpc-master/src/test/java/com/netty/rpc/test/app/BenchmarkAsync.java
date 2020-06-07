@@ -8,9 +8,7 @@ import com.netty.rpc.client.proxy.IAsyncObjectProxy;
 
 import java.util.concurrent.TimeUnit;
 
-/**
- * Created by luxiaoxun on 2016/3/16.
- */
+
 public class BenchmarkAsync {
     public static void main(String[] args) throws InterruptedException {
         ServiceDiscovery serviceDiscovery = new ServiceDiscovery("127.0.0.1:2181");
@@ -31,7 +29,6 @@ public class BenchmarkAsync {
                             IAsyncObjectProxy client = rpcClient.createAsync(HelloService.class);
                             RPCFuture helloFuture = client.call("hello", Integer.toString(i));
                             String result = (String) helloFuture.get(3000, TimeUnit.MILLISECONDS);
-                            //System.out.println(result);
                             if (!result.equals("Hello! " + i))
                                 System.err.println("error = " + result);
                         } catch (Exception e) {

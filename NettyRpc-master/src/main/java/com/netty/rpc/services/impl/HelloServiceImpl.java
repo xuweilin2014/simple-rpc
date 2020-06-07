@@ -20,4 +20,9 @@ public class HelloServiceImpl implements HelloService {
     public String hello(Person person) {
         return "Hello! " + person.getFirstName() + " " + person.getLastName();
     }
+
+    @Override
+    public String toString() {
+        return "This is Hello Service";
+    }
 }

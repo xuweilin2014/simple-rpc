@@ -11,11 +11,10 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.util.UUID;
 
-/**
- * Created by luxiaoxun on 2016-03-16.
- */
 public class ObjectProxy<T> implements InvocationHandler, IAsyncObjectProxy {
+
     private static final Logger LOGGER = LoggerFactory.getLogger(ObjectProxy.class);
+
     private Class<T> clazz;
 
     public ObjectProxy(Class<T> clazz) {
@@ -24,6 +23,7 @@ public class ObjectProxy<T> implements InvocationHandler, IAsyncObjectProxy {
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        //如果调用的是Object类中的equals、hashCode、toString三个方法，就直接返回，不发送到服务器端
         if (Object.class == method.getDeclaringClass()) {
             String name = method.getName();
             if ("equals".equals(name)) {
@@ -41,26 +41,32 @@ public class ObjectProxy<T> implements InvocationHandler, IAsyncObjectProxy {
 
         RpcRequest request = new RpcRequest();
         request.setRequestId(UUID.randomUUID().toString());
-        // getDeclaringClass 方法返回声明此 Method 对象表示的方法的类的Class对象。
+        //getDeclaringClass 方法返回声明此 Method 对象表示的方法的类的Class对象。
         request.setClassName(method.getDeclaringClass().getName());
         request.setMethodName(method.getName());
         request.setParameterTypes(method.getParameterTypes());
         request.setParameters(args);
-        // Debug
+        //Debug
         LOGGER.debug(method.getDeclaringClass().getName());
         LOGGER.debug(method.getName());
         for (int i = 0; i < method.getParameterTypes().length; ++i) {
             LOGGER.debug(method.getParameterTypes()[i].getName());
         }
-        for (int i = 0; i < args.length; ++i) {
-            LOGGER.debug(args[i].toString());
+
+        if (args != null){
+            for (Object arg : args) {
+                LOGGER.debug(arg.toString());
+            }
+        }else{
+            LOGGER.debug("no args");
         }
-        // 选择与服务端相连的一个 handler，通过此 handler 把要发送的 RpcRequest 发到 Rpc 服务器
-        // ConnectManage.getInstance().chooseHandler()：一个简单的负载均衡方法，找到应该调用的服务器。
+
+        //通过负载均衡算法，选择与服务端相连的一个 handler，通过此 handler 把要发送的 RpcRequest 发到 Rpc 服务器
+        //ConnectManage.getInstance().chooseHandler()：一个简单的负载均衡方法，找到应该调用的服务器。
         RpcClientHandler handler = ConnectManage.getInstance().chooseHandler();
         RPCFuture rpcFuture = handler.sendRequest(request);
 
-        // 调用RPCFuture的get方法，阻塞在get方法上，直到获得服务端返回的响应response（也就是方法调用的结果）
+        //调用RPCFuture的get方法，阻塞在get方法上，直到获得服务端返回的响应response（也就是方法调用的结果）
         return rpcFuture.get();
     }
 
@@ -79,7 +85,7 @@ public class ObjectProxy<T> implements InvocationHandler, IAsyncObjectProxy {
         request.setMethodName(methodName);
         request.setParameters(args);
 
-        Class[] parameterTypes = new Class[args.length];
+        Class<?>[] parameterTypes = new Class[args.length];
         // Get the right class type
         for (int i = 0; i < args.length; i++) {
             parameterTypes[i] = getClassType(args[i]);

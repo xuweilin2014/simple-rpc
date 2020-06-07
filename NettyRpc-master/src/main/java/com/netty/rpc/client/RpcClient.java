@@ -20,7 +20,9 @@ import java.util.concurrent.TimeUnit;
 public class RpcClient {
 
     private String serverAddress;
+
     private ServiceDiscovery serviceDiscovery;
+
     private static ThreadPoolExecutor threadPoolExecutor = new ThreadPoolExecutor(16, 16,
             600L, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(65536));
 
@@ -34,7 +36,7 @@ public class RpcClient {
 
     @SuppressWarnings("unchecked")
     public static <T> T create(Class<T> interfaceClass) {
-        // 创建一个代理对象，这个代理对象实现了 interfaceClass 接口，比如 HelloService
+        //创建一个代理对象，这个代理对象实现了 interfaceClass 接口，比如 HelloService
         return (T) Proxy.newProxyInstance(
                 interfaceClass.getClassLoader(),
                 new Class<?>[]{interfaceClass},

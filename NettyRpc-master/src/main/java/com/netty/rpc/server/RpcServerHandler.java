@@ -13,24 +13,24 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-public class RpcHandler extends SimpleChannelInboundHandler<RpcRequest> {
+public class RpcServerHandler extends SimpleChannelInboundHandler<RpcRequest> {
 
-    private static final Logger logger = LoggerFactory.getLogger(RpcHandler.class);
+    private static final Logger logger = LoggerFactory.getLogger(RpcServerHandler.class);
 
     private final Map<String, Object> handlerMap;
 
-    public RpcHandler(Map<String, Object> handlerMap) {
+    public RpcServerHandler(Map<String, Object> handlerMap) {
         this.handlerMap = handlerMap;
     }
 
     @Override
     public void channelRead0(final ChannelHandlerContext ctx, final RpcRequest request) throws Exception {
-        // 接收到服务端发送过来的RPCRequest之后直接提交到RPCServer中的线程池去运行，
-        // 这是因为具体的方法执行可能会耗时较多。
+        //接收到服务端发送过来的RPCRequest之后直接提交到RPCServer中的线程池去运行，
+        //这是因为具体的方法执行可能会耗时较多。
         RpcServer.submit(() -> {
             logger.debug("Receive request " + request.getRequestId());
             RpcResponse response = new RpcResponse();
-            // 实例化RPCResponse，并且设置requestId
+            //实例化RPCResponse，并且设置requestId
             response.setRequestId(request.getRequestId());
             try {
                 Object result = handle(request);
@@ -39,7 +39,7 @@ public class RpcHandler extends SimpleChannelInboundHandler<RpcRequest> {
                 response.setError(t.toString());
                 logger.error("RPC Server handle request error", t);
             }
-            // 把响应RPCResponse发送到客户端，并且添加一个监听器
+            //把响应RPCResponse发送到客户端，并且添加一个监听器
             ctx.writeAndFlush(response).addListener(new ChannelFutureListener() {
                 @Override
                 public void operationComplete(ChannelFuture channelFuture) throws Exception {
@@ -49,6 +49,7 @@ public class RpcHandler extends SimpleChannelInboundHandler<RpcRequest> {
         });
     }
 
+    //使用JDK反射来真正调用方法
     private Object handle(RpcRequest request) throws Throwable {
         String className   = request.getClassName();
         Object serviceBean = handlerMap.get(className);
@@ -67,7 +68,7 @@ public class RpcHandler extends SimpleChannelInboundHandler<RpcRequest> {
             logger.debug(parameters[i].toString());
         }
 
-        // JDK reflect
+        //JDK reflect
         Method method = serviceClass.getMethod(methodName, parameterTypes);
         method.setAccessible(true);
         return method.invoke(serviceBean, parameters);

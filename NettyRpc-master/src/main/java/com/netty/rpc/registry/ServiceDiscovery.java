@@ -15,10 +15,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 服务发现
- *
- * @author huangyong
- * @author luxiaoxun
+ * 在ServiceDiscovery这个bean初始化的时候，会建立和Zookeeper集群的连接，并且在Zookeeper的根结点/registry下面，
+ * 获取到最新的服务器地址，然后和这些服务器地址建立长连接。并且会在/registry根结点上注册监听，一旦根结点下面的子节点有变化，就会
+ * 重新扫描根节点下面的所有子节点，如果有新的子节点，就与新的服务器地址建立连接，如果有子节点从Zookeeper集群上被删除了，那么就
+ * 删除和对应服务器的连接
  */
 public class ServiceDiscovery {
 
@@ -28,7 +28,9 @@ public class ServiceDiscovery {
 
     private volatile List<String> dataList = new ArrayList<>();
 
+    //Zookeeper集群的ip地址和端口号
     private String registryAddress;
+
     private ZooKeeper zookeeper;
 
     public ServiceDiscovery(String registryAddress) {
@@ -57,7 +59,7 @@ public class ServiceDiscovery {
     private ZooKeeper connectServer() {
         ZooKeeper zk = null;
         try {
-            // 通过地址 registryAddress（127.0.0.1:2181)连接到 Zookeeper 集群，超时时间为 5 秒
+            //通过地址 registryAddress（127.0.0.1:2181)连接到 Zookeeper 集群，超时时间为 5 秒
             zk = new ZooKeeper(registryAddress, Constant.ZK_SESSION_TIMEOUT, new Watcher() {
                 @Override
                 public void process(WatchedEvent event) {
@@ -75,8 +77,8 @@ public class ServiceDiscovery {
 
     private void watchNode(final ZooKeeper zk) {
         try {
-            // 返回/registry下的所有子节点，并且注册监听，一旦/registry下的子节点数量发生变化，就会
-            // 回调watcher中的process方法
+            //返回/registry下的所有子节点，并且注册监听，一旦/registry下的子节点数量发生变化，就会
+            //回调watcher中的process方法
             List<String> nodeList = zk.getChildren(Constant.ZK_REGISTRY_PATH, new Watcher() {
                 @Override
                 public void process(WatchedEvent event) {
@@ -92,11 +94,11 @@ public class ServiceDiscovery {
             }
             logger.debug("node data: {}", dataList);
 
-            // dataList为最新的注册在Zookeeper集群中的服务器地址
+            //dataList为最新的注册在Zookeeper集群中的服务器地址
             this.dataList = dataList;
             logger.debug("Service discovery triggered updating connected server node.");
 
-            // 让客户端和现在 Zookeeper 集群中注册的最新的服务器保持长连接
+            //让客户端和现在 Zookeeper 集群中注册的最新的服务器保持长连接
             UpdateConnectedServer();
         } catch (KeeperException | InterruptedException e) {
             logger.error("", e);

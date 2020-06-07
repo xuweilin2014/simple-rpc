@@ -11,9 +11,6 @@ import java.net.SocketAddress;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 
-/**
- * Created by luxiaoxun on 2016-03-14.
- */
 public class RpcClientHandler extends SimpleChannelInboundHandler<RpcResponse> {
     private static final Logger logger = LoggerFactory.getLogger(RpcClientHandler.class);
 
@@ -54,7 +51,7 @@ public class RpcClientHandler extends SimpleChannelInboundHandler<RpcResponse> {
         RPCFuture rpcFuture = pendingRPC.get(requestId);
         if (rpcFuture != null) {
             pendingRPC.remove(requestId);
-            // 更新对应 rpcFuture，并且唤醒已经执行rpcFuture.get()的所有线程
+            //更新对应 rpcFuture，并且唤醒已经执行rpcFuture.get()的所有线程
             rpcFuture.done(response);
         }
     }
@@ -72,7 +69,7 @@ public class RpcClientHandler extends SimpleChannelInboundHandler<RpcResponse> {
     public RPCFuture sendRequest(RpcRequest request) {
         final CountDownLatch latch = new CountDownLatch(1);
         RPCFuture rpcFuture = new RPCFuture(request);
-        // pendingRPC表示正在等待rpc调用结果的请求
+        //pendingRPC表示正在等待rpc调用结果的请求
         pendingRPC.put(request.getRequestId(), rpcFuture);
         channel.writeAndFlush(request).addListener(new ChannelFutureListener() {
             @Override
@@ -81,7 +78,7 @@ public class RpcClientHandler extends SimpleChannelInboundHandler<RpcResponse> {
             }
         });
         try {
-            // 等到channel将requset完全写出去之后才能接着往下执行
+            //等到channel将request完全写出去之后才能接着往下执行
             latch.await();
         } catch (InterruptedException e) {
             logger.error(e.getMessage());
